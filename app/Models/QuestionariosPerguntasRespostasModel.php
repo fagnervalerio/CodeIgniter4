@@ -17,6 +17,7 @@ class QuestionariosPerguntasRespostasModel extends Model
         "email",
         "data_resposta",
         "resposta_id",
-        "resposta_texto"
+        "resposta_texto",
+        "observacao"
     ];
 }

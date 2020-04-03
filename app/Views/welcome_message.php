@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 	<head>
-		<title>Welcome to CodeIgniter</title>
+		<title>Rersultado da Pesquisa de Satisfação 2020</title>
 
 		<link rel="shortcut icon" type="image/png" href="/favicon.ico"/>
 	</head>
