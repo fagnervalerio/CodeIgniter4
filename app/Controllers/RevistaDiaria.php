@@ -4,6 +4,9 @@ use CodeIgniter\API\ResponseTrait;
 use App\Models\EfetivoModel;
 use App\Models\OpmsModel;
 use App\Models\PostoGraduacaoModel;
+use App\Models\RevistaDiariaModel;
+use App\Models\RevistaEfetivoModel;
+use App\Models\AfastamentosModel;
 
 class RevistaDiaria extends BaseController
 {
@@ -95,7 +98,7 @@ class RevistaDiaria extends BaseController
         $opm = $opmModel->find($opm_id);
 
         $result = [
-            [0, $opm->descricao, null]
+            ["nivel" => 0, "titulo" => $opm->descricao, "nome" => null]
         ];
         $result = array_merge($result, $this->opmSubEfet($opm_id));
         
@@ -105,13 +108,14 @@ class RevistaDiaria extends BaseController
     private function opmSubEfet($opm_id)
     {
         $result = [];
+        $revista = json_decode($this->revista()->getBody());
 
         $opmModel = new OpmsModel();
         $opms = $opmModel->where("opm_pai_id = $opm_id")->findAll();
         if($opms) {
             foreach($opms as $opm) {
                 // Opms Subordinadas
-                $result[] = [1, $opm->descricao, null];
+                $result[] = ["nivel" => 1, "titulo" => $opm->descricao, "nome" => null];
 
                 // Efetivo
                 $efetivoModel = new EfetivoModel();
@@ -119,13 +123,136 @@ class RevistaDiaria extends BaseController
                 if($efetivo) {
                     foreach($efetivo as $pm) {
                         $pmData = $this->getUsuario($pm->id);
-                        $result[] = [2, null, strtoupper("{$pmData->posto_graduacao->abreviacao} PM $pmData->nome_guerra")];
+                        $efet = ["nivel" => 2, "titulo" => null, "nome" => strtoupper("{$pmData->posto_graduacao->abreviacao} PM $pmData->nome_guerra")];
+                        if(isset($revista->id)) {
+                            $sts = json_decode($this->revistaUsuarioStatus($revista->id, $pm->id)->getBody());
+                            if($sts) {
+                                $efet["situacao"] = $sts->afastamento_id;
+                                $efet["situacao_descricao"] = $sts->afastamento;
+                            }                            
+                        }
+                        $result[] = $efet;
                     }
                 }
             }
         }
 
         return $result;
+    }
+
+    public function revista($revista_id = false)
+    {        
+        $this->cors();
+
+        $revModel = new RevistaDiariaModel();
+        
+        if($revista_id) {
+            // Retoirna os dados da revista solicitada
+            $revista = $revModel->find($revista_id);
+        }
+        else {
+            $revista = $revModel->where("situacao = 1")->first();
+        }
+        
+        $result = (object)[
+            "id" => "",
+            "data_hora" => "",
+            "sargento_dia" => "",
+            "oficial_dia" => "",
+            "em_forma" => "0",
+            "novidades" => "0",
+            "total" => "0"
+        ];
+
+        // Se achou uma revista, retorna os dados solicitados
+        if($revista) {
+            $result->id = $revista->id;
+            $result->data_hora = $revista->data_revista . " " . $revista->hora_revista;
+
+            // Pega o SGT
+            $sgtDia = $this->getUsuario($revista->efetivo_conferente_id);
+            $result->sargento_dia = strtoupper($sgtDia->posto_graduacao->abreviacao) . " PM " . $sgtDia->nome_guerra;
+
+            // Pega o OF
+            $ofDia = $this->getUsuario($revista->efetivo_assinante_id);
+            $result->oficial_dia = strtoupper($ofDia->posto_graduacao->abreviacao) . " PM " . $ofDia->nome_guerra;
+
+            return $this->respond($result, 200);
+        }
+        else {
+            return $this->respond(["error" => "Não foi encontrada nenhuma revista"], 400);
+        }
+    }
+
+    public function revistaUsuarioStatus($revista_id, $usuario_id)
+    {
+        $this->cors();
+        $result = [];
+
+        $revEfet = new RevistaEfetivoModel();
+        $rst = $revEfet->where("revista_id = $revista_id AND efetivo_id = $usuario_id")->first();
+        if($rst) {
+            $result = $rst;
+
+            // Pega o afastamento
+            $afast = json_decode($this->afastamento($result->afastamento_id)->getBody());
+            $result->afastamento = $afast->descricao;
+        }
+
+        return $this->respond($result, 200);
+    }
+
+    public function listarSecoes()
+    {        
+        $this->cors();
+        $result[] = [
+            "secao" => "",
+            "responsavel" => "",
+            "em_forma" => "0",
+            "novidades" => "0",
+            "total" => "0",
+            "id" => "0",
+        ];
+
+        $opmModel = new OpmsModel();
+        $opms = $opmModel->where("opm_pai_id = 0")->findAll();
+        if($opms) {
+            $result = [];
+            foreach($opms as $opm) {
+                // Pega o resposável
+                $resp = $this->getUsuario($opm->efetivo_responsavel_id);
+                $result[] = [
+                    "secao" => $opm->descricao,
+                    "responsavel" => strtoupper($resp->posto_graduacao->abreviacao) . " PM " . $resp->nome_guerra,
+                    "em_forma" => "0",
+                    "novidades" => "0",
+                    "total" => "0",
+                    "id" => "$opm->id",
+                ];
+            }            
+        }
+
+        return $this->respond($result, 200);
+    }
+
+    public function listarAfastamentos()
+    {        
+        $this->cors();
+
+        $afastModel = new AfastamentosModel();
+        $afast = $afastModel->findAll();
+
+        return $this->respond($afast, 200);
+    }
+
+    public function afastamento($afast_id)
+    {        
+        $this->cors();
+
+        $afastModel = new AfastamentosModel();
+        $afast = $afastModel->find($afast_id);
+
+        return $this->respond($afast, 200);
     }
 
 	//--------------------------------------------------------------------
