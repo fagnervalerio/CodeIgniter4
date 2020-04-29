@@ -1,0 +1,6 @@
+stdClass Object
+(
+    [data_revista] => 2020-04-29
+    [hora_revista] => 04:25:34
+    [usuario_responsavel] => 66
+)

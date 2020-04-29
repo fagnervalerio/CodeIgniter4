@@ -9,4 +9,7 @@ class RevistaEfetivoModel extends Model
     protected $returnType    = 'object';
     protected $useTimestamps = false;
     protected $DBGroup       = 'mysql';
+    protected $allowedFields = [
+        'revista_id', 'efetivo_id', 'afastamento_id', 'efetivo_responsavel_id', 'datahora'
+    ];
 }

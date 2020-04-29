@@ -9,4 +9,7 @@ class RevistaDiariaModel extends Model
     protected $returnType    = 'object';
     protected $useTimestamps = false;
     protected $DBGroup       = 'mysql';
+    protected $allowedFields = [
+        'data_revista', 'hora_revista', 'efetivo_conferente_id', 'efetivo_assinante_id', 'situacao', 'usuario_responsavel_id', 'data_abertura'
+    ];
 }

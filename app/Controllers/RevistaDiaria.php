@@ -123,7 +123,7 @@ class RevistaDiaria extends BaseController
                 if($efetivo) {
                     foreach($efetivo as $pm) {
                         $pmData = $this->getUsuario($pm->id);
-                        $efet = ["nivel" => 2, "titulo" => null, "nome" => strtoupper("{$pmData->posto_graduacao->abreviacao} PM $pmData->nome_guerra")];
+                        $efet = ["id" => $pm->id, "nivel" => 2, "titulo" => null, "nome" => strtoupper("{$pmData->posto_graduacao->abreviacao} PM $pmData->nome_guerra")];
                         if(isset($revista->id)) {
                             $sts = json_decode($this->revistaUsuarioStatus($revista->id, $pm->id)->getBody());
                             if($sts) {
@@ -139,6 +139,14 @@ class RevistaDiaria extends BaseController
 
         return $result;
     }
+
+    /**
+     * Situação da Revista
+     * 0 - cancelada
+     * 1 - Iniciada, em preenchimento
+     * 2 - Iniciada, conferida pelo sgt de dia
+     * 3 - Finalizada, conferida pelo oficial de dia
+     */
 
     public function revista($revista_id = false)
     {        
@@ -177,6 +185,28 @@ class RevistaDiaria extends BaseController
             $ofDia = $this->getUsuario($revista->efetivo_assinante_id);
             $result->oficial_dia = strtoupper($ofDia->posto_graduacao->abreviacao) . " PM " . $ofDia->nome_guerra;
 
+            return $this->respond($result, 200);
+        }
+        else {
+            return $this->respond(["error" => "Não foi encontrada nenhuma revista"], 400);
+        }
+    }
+
+    public function revistasAnteriores($dtIni, $dtFim)
+    {        
+        $this->cors();
+
+        $revModel = new RevistaDiariaModel();        
+        $revistas = $revModel->where("situacao = 3 AND data_revista BETWEEN '$dtIni' AND '$dtFim'")->findAll();
+                
+        $result = [];
+
+        // Se achou uma revista, retorna os dados solicitados
+        if($revistas) {
+            foreach($revistas as $item) {
+                $result[] = json_decode($this->revista($item->id)->getBody());
+            }
+            
             return $this->respond($result, 200);
         }
         else {
@@ -253,6 +283,59 @@ class RevistaDiaria extends BaseController
         $afast = $afastModel->find($afast_id);
 
         return $this->respond($afast, 200);
+    }
+
+    public function novaRevista()
+    {
+        $this->cors();
+
+        $postData = (object)$this->request->getJSON();
+        
+        $revDiaria = new RevistaDiariaModel();
+
+        $revista = json_decode($this->revista()->getBody());
+        if(!isset($revista->error)) {
+            $result = false;
+        }
+        else {
+            $data = [
+                "data_revista" => $postData->data_revista,
+                "hora_revista" => $postData->hora_revista,
+                "usuario_abertura_id" => $postData->usuario_responsavel,
+                "efetivo_conferente_id" => 7,
+                "efetivo_assinante_id" => 20,
+                "data_abertura" => date("Y-m-d H:i:s"),
+                "situacao" => 1
+            ];
+            $revDiaria->save($data);
+            $result = true;
+        }
+
+        return $this->respond($result, 200);
+    }
+
+    public function resultadoEfetivo()
+    {
+        $this->cors();
+
+        $postData = (object)$this->request->getJSON();
+        $data = [
+            "revista_id" => $postData->revista_id,
+            "efetivo_id" => $postData->efetivo_id,
+            "afastamento_id" => $postData->afastamento_id,
+            "datahora" => $postData->datahora,
+            "efetivo_responsavel_id" => $postData->efetivo_responsavel_id
+        ];
+
+        $resultModel = new RevistaEfetivoModel();
+        $rst = $resultModel->where("efetivo_id = $postData->efetivo_id AND revista_id = $postData->revista_id")->first();
+        if($rst) {
+            $data["id"] = $rst->id;
+        }
+            
+        $result = $resultModel->save($data);
+        
+        return $this->respond($result, 200);
     }
 
 	//--------------------------------------------------------------------
